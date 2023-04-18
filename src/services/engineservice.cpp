@@ -498,7 +498,7 @@ void EngineService::addPlugin (const PluginDescription& desc, const bool verifie
 
     if (plugs.size() > 0)
     {
-        const auto nodeId = root->addNode (plugs.getFirst(), rx, ry);
+        const auto nodeId = root->addNode (plugs.getFirst(), nullptr, "", rx, ry);
         if (EL_INVALID_NODE != nodeId)
         {
             const Node node (root->getNodeModelForId (nodeId));
@@ -739,18 +739,19 @@ void EngineService::addPlugin (const Node& graph, const PluginDescription& desc)
 
     if (auto* controller = graphs->findGraphManagerFor (graph))
     {
-        const Node node (addPlugin (*controller, desc));
+        const Node node (addPlugin (*controller, desc, nullptr, ""));
     }
 }
 
-Node EngineService::addPlugin (const Node& graph, const PluginDescription& desc, const ConnectionBuilder& builder, const bool verified)
+Node EngineService::addPlugin (const Node& graph, const PluginDescription& desc, std::unique_ptr<AudioPluginInstance> plugin, const String& pluginErrorMessage, const ConnectionBuilder& builder, const bool verified)
 {
     if (! graph.isGraph())
         return Node();
 
     OwnedArray<PluginDescription> plugs;
-    if (! verified)
+    if (! plugin && ! verified)
     {
+        // AUv3 will always be pre-verified so don't need to worry about async here
         auto* format = getWorld().getPluginManager().getAudioPluginFormat (desc.pluginFormatName);
         jassert (format != nullptr);
         auto& list (getWorld().getPluginManager().getKnownPlugins());
@@ -769,7 +770,7 @@ Node EngineService::addPlugin (const Node& graph, const PluginDescription& desc,
 
     if (auto* controller = graphs->findGraphManagerFor (graph))
     {
-        const Node node (addPlugin (*controller, descToLoad));
+        const Node node (addPlugin (*controller, descToLoad, std::move(plugin), pluginErrorMessage));
         if (node.isValid())
         {
             builder.addConnections (*controller, node.getNodeId());
@@ -807,14 +808,13 @@ void EngineService::sessionReloaded()
     }
 }
 
-Node EngineService::addPlugin (GraphManager& c, const PluginDescription& desc)
+Node EngineService::addPlugin (GraphManager& c, const PluginDescription& desc, std::unique_ptr<AudioPluginInstance> plugin, const String& pluginErrorMessage)
 {
     auto& plugins (getWorld().getPluginManager());
-    const auto nodeId = c.addNode (&desc, 0.5f, 0.5f, 0);
+    const auto nodeId = c.addNode (&desc, std::move(plugin), pluginErrorMessage, 0.5f, 0.5f, 0);
 
     if (EL_INVALID_NODE != nodeId)
     {
-        plugins.addToKnownPlugins (desc);
 
         const Node node (c.getNodeModelForId (nodeId));
         if (getWorld().getSettings().showPluginWindowsWhenAdded())
@@ -847,7 +847,7 @@ void EngineService::addMidiDeviceNode (const String& device, const bool isInput)
         PluginDescription desc;
         desc.pluginFormatName = "Internal";
         desc.fileOrIdentifier = isInput ? "element.midiInputDevice" : "element.midiOutputDevice";
-        ptr = root->getNodeForId (root->addNode (&desc, 0.5, 0.5));
+        ptr = root->getNodeForId (root->addNode (&desc, nullptr, "",    0.5, 0.5));
     }
 
     MidiDeviceProcessor* const proc = (ptr == nullptr) ? nullptr
@@ -924,7 +924,7 @@ void EngineService::replace (const Node& node, const PluginDescription& desc)
         node.getPosition (x, y);
         const auto oldNodeId = node.getNodeId();
         const auto wasWindowOpen = (bool) node.getProperty ("windowVisible");
-        const auto nodeId = ctl->addNode (&desc, x, y);
+        const auto nodeId = ctl->addNode (&desc, nullptr, "", x, y);
         if (nodeId != EL_INVALID_NODE)
         {
             NodeObjectPtr newptr = ctl->getNodeForId (nodeId);

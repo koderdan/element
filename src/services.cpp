@@ -187,6 +187,12 @@ void ServiceManager::handleMessage (const Message& msg)
 
     bool handled = false; // final else condition will set false
 
+    if (const auto* message = dynamic_cast<const AsyncMessage*> (&msg))
+    {
+        message->exec(*this);
+        return;
+    }
+
     if (const auto* message = dynamic_cast<const AppMessage*> (&msg))
     {
         OwnedArray<UndoableAction> actions;

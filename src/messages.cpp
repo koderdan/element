@@ -27,8 +27,8 @@ namespace element {
 class AddPluginAction : public UndoableAction
 {
 public:
-    AddPluginAction (ServiceManager& _app, const AddPluginMessage& msg)
-        : app (_app), graph (msg.graph), description (msg.description), builder (msg.builder), verified (msg.verified) {}
+    AddPluginAction (ServiceManager& _app, const FinishAddPluginMessage& msg)
+    : app (_app), graph (msg.graph), description (msg.description), pluginInstance(std::move(msg.pluginInstance)), pluginErrorMessage(msg.pluginErrorMessage), builder (msg.builder), verified (msg.verified) {}
     ~AddPluginAction() noexcept {}
 
     bool perform() override
@@ -57,6 +57,8 @@ private:
     ServiceManager& app;
     const Node graph;
     const PluginDescription description;
+    std::unique_ptr<AudioPluginInstance> pluginInstance;
+    String pluginErrorMessage;
     const ConnectionBuilder builder;
     const bool verified = true;
     double x, y;
@@ -65,9 +67,10 @@ private:
 
     Node addPlugin (EngineService& ec)
     {
+        // TODO: Hmm, what's this really do?
         auto node = app.getWorld().getPluginManager().getDefaultNode (description);
         if (! node.isValid())
-            return ec.addPlugin (graph, description, builder, verified);
+            return ec.addPlugin (graph, description, std::move(pluginInstance), pluginErrorMessage, builder, verified);
         return ec.addNode (node, graph, builder);
     }
 };
@@ -193,7 +196,16 @@ private:
 
 //=============================================================================
 
-void AddPluginMessage::createActions (ServiceManager& app, OwnedArray<UndoableAction>& actions) const
+void AddPluginMessage::exec(ServiceManager& app) const
+{
+    app.getWorld().getPluginManager().createAudioPluginAsync(description,
+        [&app, graph = this->graph, description = this->description, verified = this->verified] (std::unique_ptr<AudioPluginInstance> plugin, const String& error)
+        {
+            app.postMessage(new FinishAddPluginMessage(graph, description, std::move(plugin), error, verified));
+        });
+}
+
+void FinishAddPluginMessage::createActions (ServiceManager& app, OwnedArray<UndoableAction>& actions) const
 {
     actions.add (new AddPluginAction (app, *this));
 }

@@ -37,6 +37,11 @@ protected:
     Action() {}
 };
 
+struct AsyncMessage : public Message
+{
+    inline virtual void exec(ServiceManager&) const {}
+};
+
 struct AppMessage : public Message
 {
     enum ID
@@ -205,7 +210,7 @@ public:
     const bool verified;
 };
 
-struct AddPluginMessage : public AppMessage
+struct AddPluginMessage : public AsyncMessage
 {
     AddPluginMessage (const Node& g, const PluginDescription& d, const bool v = true)
         : graph (g), description (d), verified (v)
@@ -214,6 +219,24 @@ struct AddPluginMessage : public AppMessage
 
     const Node graph;
     const PluginDescription description;
+    const bool verified;
+    ConnectionBuilder builder;
+    
+    virtual void exec(ServiceManager& app) const override;
+    
+};
+
+struct FinishAddPluginMessage : public AppMessage
+{
+    FinishAddPluginMessage (const Node& g, const PluginDescription& d, std::unique_ptr<AudioPluginInstance> p, const String& e, const bool v = true)
+        : graph (g), description(d), pluginInstance(std::move(p)), pluginErrorMessage(e), verified (v)
+    {
+    }
+
+    const Node graph;
+    const PluginDescription description;
+    mutable std::unique_ptr<AudioPluginInstance> pluginInstance;
+    const String pluginErrorMessage;
     const bool verified;
     ConnectionBuilder builder;
     void createActions (ServiceManager& app, OwnedArray<UndoableAction>& actions) const override;

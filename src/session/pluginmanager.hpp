@@ -107,7 +107,8 @@ public:
     void restoreUserPlugins (const XmlElement& xml);
 
     AudioPluginInstance* createAudioPlugin (const PluginDescription& desc, String& errorMsg);
-    NodeObject* createGraphNode (const PluginDescription& desc, String& errorMsg);
+    void createAudioPluginAsync (const PluginDescription& desc, AudioPluginFormat::PluginCreationCallback callback);
+    NodeObject* createGraphNode (const PluginDescription& desc,  std::unique_ptr<AudioPluginInstance> precreatedPlugin, const String& precreatedPluginErrorMsg, String& errorMsg);
 
     /** Set the play config used when instantiating plugins */
     void setPlayConfig (double sampleRate, int blockSize);

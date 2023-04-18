@@ -909,7 +909,7 @@ void PluginManagerContentView::didBecomeActive()
     if (pluginList)
         pluginList.reset();
 
-    pluginList = std::make_unique<element::PluginListComponent> (plugins, settings.getUserSettings());
+    pluginList = std::make_unique<element::PluginListComponent> (plugins, settings.getUserSettings(), true);
     addAndMakeVisible (pluginList.get());
     resized();
 

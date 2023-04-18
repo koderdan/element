@@ -147,7 +147,7 @@ private:
                     break;
             }
 
-            auto nodeId = manager.addNode (&desc, rx, ry);
+            auto nodeId = manager.addNode (&desc, nullptr, "", rx, ry);
             ioNodes[t] = manager.getNodeForId (nodeId);
             jassert (ioNodes[t] != nullptr);
         }
@@ -322,11 +322,11 @@ bool GraphManager::contains (const uint32 nodeId) const
     return processor.getNodeForId (nodeId) != nullptr;
 }
 
-NodeObject* GraphManager::createFilter (const PluginDescription* desc, double x, double y, uint32 nodeId)
+NodeObject* GraphManager::createFilter (const PluginDescription* desc, std::unique_ptr<AudioPluginInstance> plugin, const String& pluginErrorMessage, double x, double y, uint32 nodeId)
 {
     String errorMessage;
     auto node = std::unique_ptr<NodeObject> (
-        pluginManager.createGraphNode (*desc, errorMessage));
+        pluginManager.createGraphNode (*desc, std::move(plugin), pluginErrorMessage, errorMessage));
 
     if (errorMessage.isNotEmpty())
     {
@@ -361,7 +361,7 @@ uint32 GraphManager::addNode (const Node& newNode)
 
     uint32 nodeId = EL_INVALID_NODE;
     const PluginDescription desc (pluginManager.findDescriptionFor (newNode));
-    if (auto* node = createFilter (&desc, 0, 0, newNode.hasProperty (Tags::id) ? newNode.getNodeId() : 0))
+    if (auto* node = createFilter (&desc, nullptr, "", 0, 0, newNode.hasProperty (Tags::id) ? newNode.getNodeId() : 0))
     {
         nodeId = node->nodeId;
         ValueTree data = newNode.getValueTree().createCopy();
@@ -387,7 +387,7 @@ uint32 GraphManager::addNode (const Node& newNode)
     return nodeId;
 }
 
-uint32 GraphManager::addNode (const PluginDescription* desc, double rx, double ry, uint32 nodeId)
+uint32 GraphManager::addNode (const PluginDescription* desc, std::unique_ptr<AudioPluginInstance> plugin, const String& errorMsg, double rx, double ry, uint32 nodeId)
 {
     if (! desc)
     {
@@ -397,7 +397,7 @@ uint32 GraphManager::addNode (const PluginDescription* desc, double rx, double r
         return EL_INVALID_NODE;
     }
 
-    if (auto* object = createFilter (desc, rx, ry, nodeId))
+    if (auto* object = createFilter (desc, std::move(plugin), errorMsg, rx, ry, nodeId))
     {
         nodeId = object->nodeId;
         ValueTree data (Tags::node);
@@ -596,7 +596,7 @@ void GraphManager::setNodeModel (const Node& node)
     {
         Node node (nodes.getChild (i), false);
         const PluginDescription desc (pluginManager.findDescriptionFor (node));
-        if (NodeObjectPtr obj = createFilter (&desc, 0.0, 0.0, node.getNodeId()))
+        if (NodeObjectPtr obj = createFilter (&desc, nullptr, "", 0.0, 0.0, node.getNodeId()))
         {
             setupNode (node.getValueTree(), obj);
             obj->setEnabled (node.isEnabled());

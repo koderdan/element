@@ -263,29 +263,47 @@ public:
         }
     }
 
-    void handleAsyncUpdate() override
+    struct ScanJob : public ThreadPoolJob
     {
-        if (! scanFile.existsAsFile())
+        ScanJob (PluginScannerSlave& s)  : ThreadPoolJob ("pluginscannerslave"), scanner (s) {}
+
+        JobStatus runJob()
         {
-            sendState ("scanning");
-            sendState ("finished");
-            return;
+            if (! scanner.scanFile.existsAsFile())
+            {
+                scanner.sendState ("scanning");
+                scanner.sendState ("finished");
+                return jobHasFinished;
+            }
+
+            scanner.updateScanFileWithSettings();
+
+            scanner.sendState ("scanning");
+
+            for (const auto& format : scanner.formatsToScan)
+                scanner.scanFor (format);
+
+            scanner.settings->saveIfNeeded();
+            scanner.sendState ("finished");
+
+    #if JUCE_LINUX
+            // workaround to get the background process to quit
+            scanner.handleConnectionLost();
+    #endif
+            
+            return jobHasFinished;
         }
 
-        updateScanFileWithSettings();
+        PluginScannerSlave& scanner;
 
-        sendState ("scanning");
-
-        for (const auto& format : formatsToScan)
-            scanFor (format);
-
-        settings->saveIfNeeded();
-        sendState ("finished");
-
-#if JUCE_LINUX
-        // workaround to get the background process to quit
-        handleConnectionLost();
-#endif
+        JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ScanJob)
+    };
+    
+    std::unique_ptr<ThreadPool> pool;
+    void handleAsyncUpdate() override
+    {
+        pool.reset (new ThreadPool (1));
+        pool->addJob (new ScanJob (*this), true);
     }
 
     void updateScanFileWithSettings()
@@ -402,7 +420,7 @@ private:
 
         const auto key = String (settings->lastPluginScanPathPrefix) + format.getName();
         FileSearchPath path (settings->getUserSettings()->getValue (key));
-        scanner = new PluginDirectoryScanner (pluginList, format, path, true, plugins->getDeadAudioPluginsFile(), false);
+        scanner = new PluginDirectoryScanner (pluginList, format, path, true, plugins->getDeadAudioPluginsFile(), true);
 
         while (doNextScan())
             sendString ("progress", String (scanner->getProgress()));
@@ -758,11 +776,24 @@ AudioPluginInstance* PluginManager::createAudioPlugin (const PluginDescription& 
         .release();
 }
 
-NodeObject* PluginManager::createGraphNode (const PluginDescription& desc, String& errorMsg)
+void PluginManager::createAudioPluginAsync (const PluginDescription& desc, AudioPluginFormat::PluginCreationCallback callback)
 {
-    errorMsg.clear();
+    getAudioPluginFormats().createPluginInstanceAsync (desc, priv->sampleRate, priv->blockSize, callback);
+}
 
-    if (auto* const plugin = createAudioPlugin (desc, errorMsg))
+NodeObject* PluginManager::createGraphNode (const PluginDescription& desc, std::unique_ptr<AudioPluginInstance> precreatedPlugin, const String& precreatedPluginErrorMsg, String& errorMsg)
+{
+    AudioPluginInstance* plugin;
+    
+    if (!precreatedPlugin && precreatedPluginErrorMsg.isNotEmpty()) {
+        errorMsg.clear();
+        plugin = createAudioPlugin (desc, errorMsg);
+    } else {
+        plugin = precreatedPlugin.release();
+        errorMsg = precreatedPluginErrorMsg;
+    }
+
+    if (plugin)
     {
         plugin->enableAllBuses();
         return priv->nodes.wrap (plugin);

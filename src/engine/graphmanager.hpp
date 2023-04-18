@@ -65,7 +65,7 @@ public:
     uint32 addNode (const Node& node);
 
     /** Adss a node with a plugin description */
-    uint32 addNode (const PluginDescription* desc, double x = 0.0f, double y = 0.0f, uint32 nodeId = 0);
+    uint32 addNode (const PluginDescription* desc, std::unique_ptr<AudioPluginInstance> plugin, const String& errorMsg, double x = 0.0f, double y = 0.0f, uint32 nodeId = 0);
 
     /** Remove a node by ID */
     void removeNode (const uint32 nodeId);
@@ -123,6 +123,7 @@ private:
     uint32 getNextUID() noexcept;
     inline void changed() { sendChangeMessage(); }
     NodeObject* createFilter (const PluginDescription* desc, double x = 0.0f, double y = 0.0f, uint32 nodeId = 0);
+    NodeObject* createFilter (const PluginDescription* desc, std::unique_ptr<AudioPluginInstance> plugin, const String& pluginErrorMessage, double x, double y, uint32 nodeId);
     NodeObject* createPlaceholder (const Node& node);
 
     void setupNode (const ValueTree& data, NodeObjectPtr object);

@@ -58,7 +58,7 @@ public:
 
     /** Adds a plugin to a specific graph and adds connections from
         a ConnectionBuilder */
-    Node addPlugin (const Node& graph, const PluginDescription& desc, const ConnectionBuilder& builder, const bool verified = true);
+    Node addPlugin (const Node& graph, const PluginDescription& desc, std::unique_ptr<AudioPluginInstance> plugin, const String& pluginErrorMessage, const ConnectionBuilder& builder, const bool verified = true);
 
     /** Adds a midi device node to the current root graph */
     void addMidiDeviceNode (const String& device, const bool isInput);
@@ -129,7 +129,8 @@ private:
 
     friend class ChangeBroadcaster;
     void changeListenerCallback (ChangeBroadcaster*) override;
-    Node addPlugin (GraphManager& controller, const PluginDescription& desc);
+    Node addPlugin (GraphManager& controller, const PluginDescription& desc, std::unique_ptr<AudioPluginInstance> plugin, const String& pluginErrorMessage);
+
 };
 
 } // namespace element
